@@ -19,7 +19,7 @@ FRANKA_JOINT_VEL = [2.075, 2.075, 2.075, 2.075, 2.51, 2.51, 2.51]
 RATE_HZ   = float(os.environ.get("ARM_RATE_HZ", "100"))
 PERIOD    = 1.0 / RATE_HZ
 VEL_SAFETY_RATIO = 0.7
-EMA_ALPHA = float(os.environ.get("ARM_EMA", "0.99"))
+EMA_ALPHA = float(os.environ.get("ARM_EMA", "0.8"))
 MAX_STEP_JOINT = [v * PERIOD * VEL_SAFETY_RATIO for v in FRANKA_JOINT_VEL]
 
 # --- Gripper ranges & dynamics ---

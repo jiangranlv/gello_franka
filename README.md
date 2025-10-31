@@ -2,6 +2,7 @@
 
 
 ## Quick Start
+First, confirm that your computer has a real-time kernel and polymetis installed.
 
 ```bash
 git clone https://github.com/wuphilipp/gello_software.git
@@ -60,18 +61,71 @@ python3 scripts/gello_get_offset.py \
 ```
       
 To apply your configuration:
-- Update the `/workspace/src/franka_gello_state_publisher/config/gello_config.yaml` file.
-- Rebuild the project to ensure the updated configuration is applied:
+- Update the configuration in the `/experiments/test.py` file. The location is indicated by the message on line 38.
 
+Calibrate your gello in a simulated environment:
+
+In the real environment, keep your gello in an initial pose as shown in the figure below.
+Then
 ```bash
-colcon build
+python experiments/test.py
+```
+Calibrate the orientation of each joint based on the simulation environment.
+<p align="center">
+  <img src="imgs/fr3_gello_calib_pose.jpeg" width="31%"/>
+</p>
+
+#### Step 3: Real-device testing
+- Update the calibrated settings in the `/experiments/gello_master_client.py` file.
+Then proceed with the Franka R3 robotic arm connection test.
+
+terminal 1:
+```bash
+conda activate polymetis-local
+cd <Polymetis installation path>/fairo/polymetis/polymetis/python/scripts
+python launch_robot.py \
+  ip=0.0.0.0 port=50051 \
+  robot_client=franka_hardware \
+  robot_client.executable_cfg.exec=franka_panda_client \
+  robot_client.executable_cfg.robot_ip=192.168.1.10 \
+  robot_client.executable_cfg.use_real_time=true
+  robot_client.executable_cfg.control_port=50051
 ```
 
-#### Step 3: Run Script
+terminal 2:
 ```bash
-python scripts/example.py
+conda activate polymetis-local
+cd <Polymetis installation path>/fairo/polymetis/polymetis/python/scripts
+python launch_robot.py \
+  ip=0.0.0.0 port=50051 \
+  robot_client=franka_hardware \
+  robot_client.executable_cfg.exec=franka_panda_client \
+  robot_client.executable_cfg.robot_ip=192.168.1.10 \
+  robot_client.executable_cfg.use_real_time=true
+  robot_client.executable_cfg.control_port=50051
 ```
+The gripper will open and close once.
 
+terminal 3:
+```bash
+conda activate polymetis-local
+cd /gello_software/experiments
+python r3_bridge_server.py
+```
+The robotic arm and gripper will move to their initial position.
+
+terminal 4:
+
+- Note that before connecting the master and slave arms, Gello must maintain the pose and orientation used during calibration.
+
+```bash
+conda deactivate
+cd /gello/gello_software
+source .venv/bin/activate
+
+cd /gello/gello_software/experiments
+python gello_master_client.py
+```
 
 ## Development
 

@@ -19,3 +19,7 @@ xarm
 xarm-python-sdk
 numpy-quaternion
 termcolor
+pybullet
+torch
+h5py
+opencv-python

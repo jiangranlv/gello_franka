@@ -29,7 +29,7 @@ CONFIG = {
     "gripper_config": (155.66328125, 199.86328125),
 }
 
-FR3_URDF = "/home/galbot/Lin/Projects/Teleoperation/gello/gello_software/fr3-urdf-pybullet-main/franka_description_pybullet/robots/fr3/fr3_pybullet.urdf"
+FR3_URDF = "../fr3-urdf-pybullet-main/franka_description_pybullet/robots/fr3/fr3_pybullet.urdf"
 
 # ---------- Safety & Mapping Helpers ----------
 def check_joint_limits(q):
