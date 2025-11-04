@@ -5,8 +5,8 @@
 First, confirm that your computer has a real-time kernel and polymetis installed.
 
 ```bash
-git clone https://github.com/wuphilipp/gello_software.git
-cd gello_software
+git clone https://github.com/jiangranlv/gello_franka.git
+cd gello_franka
 ```
 
 ## Installation
@@ -50,7 +50,13 @@ usb-FTDI_USB__-__Serial_Converter_FT7WBG6
 In this case, the `GELLO_USB_ID` would be `/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7WBG6`.
 
 #### Step 2: Configure your GELLO 
-      
+
+
+```bash  
+newgrp dialout # Temporary Effect
+sudo usermod -aG dialout,plugdev <urser's name> # Takes effect permanently, but requires a reboot
+```
+
 If not done already, follow the instructions of the `Create the GELLO configuration and determining joint ID's` section in the main README.md. Use the provided script to configure the GELLO for Franka FR3:
 
 ```bash
