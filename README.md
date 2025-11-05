@@ -1,8 +1,29 @@
 # GELLO for Franka
+polymetis:
+```bash
+git clone https://github.com/facebookresearch/fairo.git
+cd fairo/polymetis
+```
 
+```bash
+conda env create -f ./polymetis/environment.yml
+conda activate polymetis-local
+pip install -e ./polymetis
+conda install -n polymetis-local -c conda-forge fmt
+```
+
+#Replace the scripts/build_libfranka.sh file in polymetis with the file polymetis/build_libfranka.sh from gello.
+
+```bash
+./scripts/build_libfranka.sh 0.15.0
+```
+
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_FRANKA=ON -DBUILD_TESTS=ON -DBUILD_DOCS=ON
+make -j
+```
 
 ## Quick Start
-First, confirm that your computer has a real-time kernel and polymetis installed.
 
 ```bash
 git clone https://github.com/jiangranlv/gello_franka.git
@@ -29,7 +50,6 @@ uv pip install -e .
 uv pip install -e third_party/DynamixelSDK/python
 ```
 
-
 ## Getting Started
 
 ### 1. **Run the GELLO Publisher**  
@@ -50,12 +70,16 @@ usb-FTDI_USB__-__Serial_Converter_FT7WBG6
 In this case, the `GELLO_USB_ID` would be `/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7WBG6`.
 
 #### Step 2: Configure your GELLO 
-
+##### Process 1 
+Verify that your interface is properly connected.
 
 ```bash  
+sudo usermod -aG dialout,plugdev <urser's name> 
+# Takes effect permanently, but requires a reboot
 newgrp dialout # Temporary Effect
-sudo usermod -aG dialout,plugdev <urser's name> # Takes effect permanently, but requires a reboot
 ```
+
+##### Process 2 
 
 If not done already, follow the instructions of the `Create the GELLO configuration and determining joint ID's` section in the main README.md. Use the provided script to configure the GELLO for Franka FR3:
 
@@ -68,6 +92,8 @@ python3 scripts/gello_get_offset.py \
       
 To apply your configuration:
 - Update the configuration in the `/experiments/test.py` file. The location is indicated by the message on line 38.
+
+##### Process 3
 
 Calibrate your gello in a simulated environment:
 
@@ -83,7 +109,8 @@ Calibrate the orientation of each joint based on the simulation environment.
 
 #### Step 3: Real-device testing
 - Update the calibrated settings in the `/experiments/gello_master_client.py` file.
-Then proceed with the Franka R3 robotic arm connection test.
+Then proceed with the Franka R3 robotic arm connection test:
+In the simulation environment, verify whether each joint is calibrated. If the motion is reversed, return to Process 2 and modify the joint signs for the corresponding joint.
 
 terminal 1:
 ```bash
@@ -102,20 +129,19 @@ terminal 2:
 ```bash
 conda activate polymetis-local
 cd <Polymetis installation path>/fairo/polymetis/polymetis/python/scripts
-python launch_robot.py \
-  ip=0.0.0.0 port=50051 \
-  robot_client=franka_hardware \
-  robot_client.executable_cfg.exec=franka_panda_client \
-  robot_client.executable_cfg.robot_ip=192.168.1.10 \
-  robot_client.executable_cfg.use_real_time=true
-  robot_client.executable_cfg.control_port=50051
+python launch_gripper.py \
+  ip=0.0.0.0 port=50052 \
+  gripper=franka_hand \
+  gripper.executable_cfg.robot_ip=192.168.1.10 \
+  gripper.executable_cfg.control_ip=127.0.0.1 \
+  gripper.executable_cfg.control_port=50052
 ```
 The gripper will open and close once.
 
 terminal 3:
 ```bash
 conda activate polymetis-local
-cd /gello_software/experiments
+cd /gello_franka/experiments
 python r3_bridge_server.py
 ```
 The robotic arm and gripper will move to their initial position.
@@ -126,11 +152,11 @@ terminal 4:
 
 ```bash
 conda deactivate
-cd /gello/gello_software
+cd /gello_franka
 source .venv/bin/activate
 
-cd /gello/gello_software/experiments
-python gello_master_client.py
+cd /gello_franka
+python experiments/gello_master_client.py
 ```
 
 ## Development
