@@ -1,4 +1,6 @@
 # GELLO for Franka
+First, confirm that your computer has a real-time kernel and polymetis installed.
+
 polymetis:
 ```bash
 git clone https://github.com/facebookresearch/fairo.git
