@@ -109,10 +109,14 @@ Calibrate the orientation of each joint based on the simulation environment.
   <img src="imgs/fr3_gello_calib_pose.jpeg" width="31%"/>
 </p>
 
-#### Step 3: Real-device testing
 - Update the calibrated settings in the `/experiments/gello_master_client.py` file.
 Then proceed with the Franka R3 robotic arm connection test:
 In the simulation environment, verify whether each joint is calibrated. If the motion is reversed, return to Process 2 and modify the joint signs for the corresponding joint.
+
+#### Step 3: Real-device testing
+
+- Before debugging on the actual robot, verify your workspace boundaries. We recommend modifying the “bounding box of the workspace” parameters in the file <Polymetis installation path>/fairo/polymetis/polymetis/conf/robot_client/franka_hardware_client.yaml: Change the value on line 35 from 0.4 to 1.0, and the value on line 39 from -0.4 to -1.0. If the range proves insufficient, further adjustments can be made later.
+
 
 terminal 1:
 ```bash

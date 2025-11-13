@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os, time, threading, re
-from typing import List, Optional
+import os, time, threading
+from typing import List
 import numpy as np
-import zmq, torch, cv2, h5py
+import zmq, torch
 from polymetis import RobotInterface, GripperInterface
 
 # ---------- Config & Limits ----------
@@ -39,19 +39,6 @@ SNAP_EPS = float(os.environ.get("SNAP_EPS", "0.001"))
 # --- Stream watchdog ---
 NO_STREAM_WARN_S = float(os.environ.get("NO_STREAM_WARN_S", "0.5"))
 
-# --- Recording & camera ---
-SAVE_FREQ = float(os.environ.get("SAVE_FREQ", "20"))
-SAVE_DIR  = os.environ.get("SAVE_DIR", "dataset/cup")
-CAM_DEV   = os.environ.get("CAM_DEV", "/dev/video0")
-CAM_FOURCC = os.environ.get("CAM_FOURCC", "MJPG")
-CAM_SIZE  = (int(os.environ.get("CAM_W", "2560")), int(os.environ.get("CAM_H", "720")))
-CAM_FPS   = int(os.environ.get("CAM_FPS", "20"))
-CROP_RIGHT_HALF = True
-DOWNSAMPLE = 4
-
-# --- Episode length (frames) ---
-SAVE_FRAM = 100400
-
 # --- Start pose & alignment ---
 START_JOINTS_DEFAULT = [0, 0, 0, -1.57, 0, 1.57, 0]
 START_HOLD_S = float(os.environ.get("START_HOLD_S", "0.5"))
@@ -71,46 +58,6 @@ def step_toward(curr: List[float], tgt: List[float], max_steps: List[float]) -> 
 
 def is_close(q1, q2, tol=ALIGN_TOL) -> bool:
     return all(abs(a-b) <= tol for a, b in zip(q1, q2))
-
-# ---------- Camera ----------
-class CameraReader:
-    """V4L2 camera thread with latest-frame buffer."""
-    def __init__(self, dev=CAM_DEV, api=cv2.CAP_V4L2, fourcc=CAM_FOURCC, size=CAM_SIZE, fps=CAM_FPS):
-        self.dev, self.api, self.fourcc, self.size, self.fps = dev, api, fourcc, size, fps
-        self.cap = None
-        self._lock = threading.Lock()
-        self._stop = False
-        self.latest_frame = None
-        self._t = None
-
-    def start(self):
-        cap = cv2.VideoCapture(self.dev, self.api)
-        if not cap.isOpened(): raise RuntimeError(f"cannot open {self.dev}")
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*self.fourcc))
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.size[0])
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
-        cap.set(cv2.CAP_PROP_FPS, self.fps)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        self.cap = cap
-        self._stop = False
-        self._t = threading.Thread(target=self._loop, daemon=True)
-        self._t.start()
-
-    def _loop(self):
-        while not self._stop and self.cap is not None:
-            ok, frame = self.cap.read()
-            if not ok: time.sleep(0.005); continue
-            with self._lock: self.latest_frame = frame
-
-    def get_latest(self):
-        with self._lock:
-            return None if self.latest_frame is None else self.latest_frame.copy()
-
-    def stop(self):
-        self._stop = True
-        if self._t is not None: self._t.join(timeout=1.0)
-        if self.cap is not None: self.cap.release()
-        cv2.destroyAllWindows()
 
 # ---------- Gripper ----------
 class GripperWorker(threading.Thread):
@@ -149,74 +96,9 @@ class GripperWorker(threading.Thread):
             else:
                 time.sleep(0.001)
 
-# ---------- Recorder ----------
-class EpisodeRecorder:
-    """Buffer state/action/image at SAVE_FREQ; dump HDF5 when full()."""
-    def __init__(self, save_dir: str, save_freq: float, gripper: GripperInterface):
-        self.dir = save_dir
-        os.makedirs(self.dir, exist_ok=True)
-        self.dt = 1.0 / save_freq
-        self.g = gripper
-        self.reset_buffers()
-
-    def reset_buffers(self):
-        self.qpos_list: List[np.ndarray] = []
-        self.action_list: List[np.ndarray] = []
-        self.image_list: List[np.ndarray] = []
-        self._init_t = -100.0
-        self._count = 0
-        self._started = False
-
-    def maybe_push(self, robot: RobotInterface, target_q: List[float], w_cmd: float, frame: Optional[np.ndarray]):
-        now = time.time()
-        if (now - self._init_t) > (self.dt * self._count):
-            if not self._started:
-                self._init_t = now; self._started = True
-            self._count += 1
-
-            q_raw = safe_list(robot.get_joint_positions())
-            qpos = np.zeros(8, dtype=np.float32)
-            qpos[:7] = np.array(q_raw if q_raw is not None else target_q, dtype=np.float32)
-
-            try:
-                w_state = float(self.g.get_state().width)
-            except Exception:
-                w_state = w_cmd
-            qpos[7] = float(min(max(w_state, GRIPPER_MIN), GRIPPER_MAX))
-            self.qpos_list.append(qpos)
-
-            act = np.zeros(8, dtype=np.float32)
-            act[:7] = np.array(target_q, dtype=np.float32)
-            act[7]  = float(w_cmd)
-            self.action_list.append(act)
-
-            if frame is not None:
-                H, W, C = frame.shape
-                if CROP_RIGHT_HALF: frame = frame[:, W//2:, :]
-                H, W, C = frame.shape
-                frame = cv2.resize(frame, (W//DOWNSAMPLE, H//DOWNSAMPLE), interpolation=cv2.INTER_AREA)
-                self.image_list.append(frame.copy())
-
-    def full(self) -> bool:
-        return len(self.image_list) == SAVE_FRAM and len(self.image_list) > 0
-
-    def save_and_next(self) -> str:
-        pat = re.compile(r"^episode_(\d+)\.hdf5$")
-        used = {int(m.group(1)) for f in os.listdir(self.dir) for m in [pat.match(f)] if m}
-        idx = 0
-        while idx in used: idx += 1
-        path = os.path.join(self.dir, f"episode_{idx}.hdf5")
-        with h5py.File(path, 'w') as f:
-            f.create_dataset('image_diagonal_view', data=self.image_list, compression='gzip', compression_opts=9)
-            f.create_dataset('action', data=self.action_list, compression='gzip', compression_opts=9)
-            f.create_dataset('qpos',   data=self.qpos_list, compression='gzip', compression_opts=9)
-        os.chmod(path, 0o777)
-        self.reset_buffers()
-        return path
-
 # ---------- Control ----------
 class Control:
-    """Robot bringup, ZMQ I/O, smoothing, rate-limited control, and recording."""
+    """Robot bringup, ZMQ I/O, smoothing, rate-limited control."""
     def __init__(self):
         ip = os.environ.get("POLYMETIS_SERVER_IP", "127.0.0.1")
         self.robot = RobotInterface(ip_address=ip, port=int(os.environ.get("POLYMETIS_SERVER_PORT", "50051")))
@@ -224,7 +106,6 @@ class Control:
         if hasattr(self.grip, "home"): self.grip.home()
         self.grip.goto((GRIPPER_MIN + GRIPPER_MAX)/2.0, 0.1, 15, False)
 
-        self.cam = CameraReader(); self.cam.start()
         self.rep, self.pull, self.pub = self._bind_zmq()
 
         self.target_q = START_JOINTS_DEFAULT[:]
@@ -233,8 +114,6 @@ class Control:
 
         self._w_lock = threading.Lock()
         self._w_in = 0.0
-
-        self.rec = EpisodeRecorder(SAVE_DIR, SAVE_FREQ, self.grip)
 
         self._align_to_pose(START_JOINTS_DEFAULT)
         self._handshake_and_optional_align()
@@ -309,17 +188,7 @@ class Control:
         self.robot.update_desired_joint_positions(torch.tensor(next_q, dtype=torch.float32))
         self.curr_q = next_q
 
-        frame = self.cam.get_latest()
         w_cmd_for_action = GripperWorker._map_and_snap(self.get_w_in())
-        self.rec.maybe_push(self.robot, self.target_q, w_cmd_for_action, frame)
-
-        if self.rec.full():
-            path = self.rec.save_and_next()
-            self.grip.goto(GRIPPER_MAX, GRIPPER_SPEED, GRIPPER_FORCE, False)
-            time.sleep(0.2)
-            self._align_to_pose(START_JOINTS_DEFAULT)
-            print(f"[comm] episode saved: {path}")
-            return False
 
         if (t0 - self.last_pub_t) > 0.2:
             self.last_pub_t = t0
@@ -341,8 +210,6 @@ class Control:
             while self.loop_once():
                 pass
         finally:
-            try: self.cam.stop()
-            except: pass
             try: self.gw.stop()
             except: pass
 
