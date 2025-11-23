@@ -323,7 +323,7 @@ def main():
     arm_joint_indices = []
     finger_joint_indices = []
     if USE_SIM:
-        FR3_URDF = "fr3-urdf-pybullet\franka_description_pybullet\robots\fr3\fr3_pybullet.urdf"
+        FR3_URDF = "fr3-urdf-pybullet/franka_description_pybullet/robots/fr3/fr3_pybullet.urdf"
         if not os.path.isabs(FR3_URDF):
             FR3_URDF = os.path.abspath(FR3_URDF)
         sim_robot_ID, arm_joint_indices, finger_joint_indices = sim_robot_init_fr3(FR3_URDF)
