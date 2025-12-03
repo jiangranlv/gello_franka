@@ -21,6 +21,9 @@ conda install -n polymetis-local -c conda-forge fmt
 ```
 
 ```bash
+mkdir -p ./polymetis/build
+cd ./polymetis/build
+
 cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_FRANKA=ON -DBUILD_TESTS=ON -DBUILD_DOCS=ON
 make -j
 ```
